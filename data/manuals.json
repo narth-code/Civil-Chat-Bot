@@ -1,0 +1,30 @@
+[
+  {
+    "id": "transportation",
+    "label": "Transportation",
+    "title": "Austin, TX Transportation Criteria Manual",
+    "filename": "Austin, TX Transportation Criteria Manual.pdf",
+    "jurisdiction": "Austin, TX"
+  },
+  {
+    "id": "environmental",
+    "label": "Environmental",
+    "title": "Austin, TX Environmental Criteria Manual",
+    "filename": "Austin, TX Environmental Criteria Manual.pdf",
+    "jurisdiction": "Austin, TX"
+  },
+  {
+    "id": "fire",
+    "label": "Fire protection",
+    "title": "Austin, TX Fire Protection Criteria Manual",
+    "filename": "Austin, TX Fire Protection Criteria Manual.pdf",
+    "jurisdiction": "Austin, TX"
+  },
+  {
+    "id": "drainage",
+    "label": "Drainage",
+    "title": "Austin, TX Drainage Criteria Manual",
+    "filename": "Austin, TX Drainage Criteria Manual.pdf",
+    "jurisdiction": "Austin, TX"
+  }
+]

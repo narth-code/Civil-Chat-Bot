@@ -1,0 +1,255 @@
+:root {
+  font-family:
+    "Inter",
+    "Segoe UI",
+    system-ui,
+    -apple-system,
+    sans-serif;
+  color: var(--fg);
+  background: var(--bg);
+  font-synthesis: none;
+  --bg: #f6f8fb;
+  --surface: #ffffff;
+  --surface-alt: #f1f4f9;
+  --fg: #18283f;
+  --muted: #5c6b80;
+  --border: #e1e7ef;
+  --accent: #2563eb;
+  --accent-fill: #2563eb;
+  --accent-soft: #edf3ff;
+  --success: #178268;
+  --warning: #9b650b;
+  --error: #bc3445;
+}
+:root[data-theme="dark"] {
+  --bg: #0d1522;
+  --surface: #141e2e;
+  --surface-alt: #1b283a;
+  --fg: #e4eaf4;
+  --muted: #9aaac1;
+  --border: #2b3a50;
+  --accent: #85adff;
+  --accent-soft: #203556;
+  --success: #6bd8b4;
+  --warning: #efc479;
+  --error: #ff8b9b;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+}
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+button,
+a,
+input,
+textarea,
+select {
+  -webkit-tap-highlight-color: transparent;
+}
+button {
+  cursor: pointer;
+}
+button:disabled {
+  cursor: not-allowed;
+}
+a {
+  color: var(--accent);
+}
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+[hidden] {
+  display: none !important;
+}
+::selection {
+  background: var(--accent-soft);
+  color: var(--fg);
+}
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+.app-shell {
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.app-header {
+  height: 76px;
+  flex: 0 0 76px;
+  padding: 0 28px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+  z-index: 10;
+}
+.app-brand,
+.app-header-actions,
+.app-breadcrumb {
+  display: flex;
+  align-items: center;
+}
+.app-brand {
+  gap: 11px;
+}
+.app-logo {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: #2563eb;
+  border-radius: 11px;
+  box-shadow: 0 3px 9px #2563eb20;
+}
+.app-brand-name {
+  font-size: 29px;
+  font-weight: 750;
+  letter-spacing: -1.4px;
+  line-height: 1;
+}
+.app-brand-dot {
+  color: var(--accent);
+}
+.app-brand-divider {
+  height: 24px;
+  width: 1px;
+  background: var(--border);
+  margin: 0 10px 0 15px;
+}
+.app-breadcrumb {
+  font-size: 12px;
+  color: var(--muted);
+  gap: 12px;
+}
+.app-breadcrumb strong {
+  color: var(--fg);
+  font-weight: 550;
+}
+.app-header-actions {
+  gap: 15px;
+}
+.app-development {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  font-weight: 650;
+  color: var(--muted);
+}
+.app-space-switch {
+  display: flex;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  padding: 4px;
+  border-radius: 9px;
+  gap: 3px;
+}
+.app-space-switch button {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  border-radius: 6px;
+  padding: 8px 13px;
+  font-size: 12px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.app-space-switch button[aria-pressed="true"] {
+  color: var(--accent);
+  background: var(--surface);
+  box-shadow: 0 1px 4px #00000010;
+}
+.app-space-switch button:hover {
+  color: var(--fg);
+}
+.app-action-divider {
+  height: 25px;
+  width: 1px;
+  background: var(--border);
+}
+.app-theme-toggle {
+  width: 35px;
+  height: 35px;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid transparent;
+  border-radius: 8px;
+}
+.app-theme-toggle:hover {
+  color: var(--fg);
+  background: var(--surface-alt);
+  border-color: var(--border);
+}
+.app-main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.workspace-frame {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+@media (max-width: 1100px) {
+  .app-breadcrumb {
+    display: none;
+  }
+  .app-brand-divider {
+    display: none;
+  }
+  .app-header {
+    padding: 0 18px;
+  }
+}
+@media (max-width: 640px) {
+  .app-development,
+  .app-action-divider {
+    display: none;
+  }
+  .app-header {
+    gap: 8px;
+    padding: 0 12px;
+  }
+  .app-header-actions {
+    gap: 8px;
+  }
+  .app-space-switch button {
+    padding: 8px;
+  }
+  .app-brand-name {
+    font-size: 25px;
+  }
+  .app-logo {
+    width: 32px;
+    height: 32px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+  }
+}
