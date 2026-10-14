@@ -1,0 +1,12 @@
+# Retrieval ranks globally on vector similarity; full-text is a measured option
+
+On the golden set (`eval/golden.json`, 80 section-targeted cases and 8 negatives), the production retrieval scored R@1 35.0 and R@8 92.5. Two causes dominated. First, fusion ran per manual, so each manual's first hit received the same RRF score and cross-manual order was arbitrary. Second, the AND full-text leg matched almost none of the expected provisions, so it only reshuffled ties. An OR-of-terms full-text leg, and full-text weights up to 1.0, lowered R@1 and MRR.
+
+Decision: unscoped searches fuse one global list across all current manuals, with no per-manual quota. Vector cosine similarity over `chunk_embeddings` is the ranking. The full-text leg stays in the code behind `RETRIEVAL_FTS_WEIGHT`, which defaults to 0.0 and uses AND over alphanumeric terms. Contextual embedding text, a headings title index, a cross-encoder reranker, and abbreviation expansion are not built, because the golden targets were met without them and each would add a model, a migration, or GPU memory with no measured gain.
+
+Duplicate-marked provisions (`<section> (duplicate N)`, 130 current provisions across the four manuals) are text carriers from the ingest structure step, not repeats, so they are kept in the database unchanged. Retrieval reports them under their base section number (`provision_identifier`) and sets `is_duplicate`. No ingest rebuild and no source data change were made. `hybrid_search(expand_neighbors=True)` may append adjacent chunks of the same provision after the primary hits; it is off by default and never changes the primary `k`.
+
+
+Consequences: an unscoped search can return every result from one manual, so callers must not assume per-manual coverage. `diversify` remains exported with its signature but `hybrid_search` no longer calls it. Full-text tests opt in through a fixture. Warm `hybrid_search` latency is p50 84 ms and p95 124 ms, and the embedder holds about 1.15 GB of GPU memory. Golden matching uses base section numbers on both sides, so a gold identifier with a duplicate suffix matches the section.
+
+Revisit this decision when a new evaluation shows title-only queries failing on the vector leg, or when duplicate identifiers cause misses that matter. The title index is the first lever to try, then the reranker. The measurements and the reasons for skipping each lever are in `eval/retrieval-experiments.md`.

@@ -1,0 +1,17 @@
+langgraph
+langchain
+langchain-core
+langchain-huggingface
+langchain-pinecone
+langchain-tavily
+langchain-text-splitters
+beautifulsoup4
+python-dotenv
+fastapi==0.143.0
+uvicorn==0.54.0
+sqlalchemy==2.1.4
+alembic==1.20.0
+asyncpg==0.32.0
+pgvector==0.5.1
+greenlet==3.5.6
+pydantic-settings==2.15.0

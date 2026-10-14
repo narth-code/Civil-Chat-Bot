@@ -1,0 +1,18 @@
+# Ingestion environment (GPU OCR + embeddings). Separate from the API's .venv.
+# Build it from the repository root, in this order (torch FIRST, from the CUDA 12.8 index):
+#   uv venv .venv-ingest --python 3.11
+#   uv pip install --python .venv-ingest/Scripts/python.exe torch==2.11.0 torchvision==0.26.0 --index-url https://download.pytorch.org/whl/cu128
+#   uv pip install --python .venv-ingest/Scripts/python.exe -r requirements-ingest.txt
+# Run stages with: .venv-ingest/Scripts/python.exe -m app.ingest.run --document-id environmental
+-r requirements.txt
+docling==2.137.0
+rapidocr==3.10.0
+pypdfium2==5.14.0
+sentence-transformers==6.1.0
+transformers==5.19.0
+accelerate==1.15.0
+huggingface_hub==1.33.0
+torch==2.11.0
+torchvision==0.26.0
+langchain-ollama==1.1.0
+langchain-tavily==0.2.18

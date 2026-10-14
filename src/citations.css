@@ -1,0 +1,61 @@
+.answer-sources {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.answer-sources > strong {
+  color: var(--muted);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.answer-sources ol {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+.answer-sources li + li {
+  margin-top: 9px;
+}
+.answer-sources li > span,
+.answer-sources li > a {
+  display: block;
+}
+.answer-sources a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.answer-source-kind {
+  color: var(--muted);
+  font-size: 10px;
+}
+.answer-sources details {
+  margin-top: 4px;
+}
+.answer-sources summary {
+  color: var(--accent);
+  cursor: pointer;
+}
+.answer-sources blockquote {
+  margin: 6px 0 0;
+  padding: 7px 9px;
+  border-left: 2px solid var(--accent);
+  border-radius: 3px;
+  color: var(--fg);
+  background: var(--surface-alt);
+  white-space: pre-wrap;
+}
+.chat-message-meta .answer-outcome {
+  display: inline-block;
+  padding: 3px 7px;
+  border-radius: 999px;
+  color: var(--accent);
+  background: var(--accent-soft);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: none;
+  letter-spacing: normal;
+}

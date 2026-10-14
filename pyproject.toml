@@ -1,0 +1,8 @@
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+extend-exclude = ["data", "dist", "node_modules"]
+
+[tool.ruff.lint]
+# pyflakes (unused imports/names, undefined names) plus syntax errors only
+select = ["F", "E9"]

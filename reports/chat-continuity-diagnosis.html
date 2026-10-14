@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chat continuity diagnosis — Civil Chatbot</title>
+<style>
+  :root{--bg:#f6f7f9;--card:#fff;--fg:#17202a;--muted:#5d6b7a;--border:#d9dee5;--accent:#1f6feb;--ok:#1a7f37;--warn:#9a6700;--err:#cf222e;--code:#eef1f5}
+  @media (prefers-color-scheme:dark){:root{--bg:#0f141a;--card:#171e26;--fg:#e6edf3;--muted:#8b98a6;--border:#2a3441;--accent:#4c9aff;--ok:#3fb950;--warn:#d29922;--err:#f85149;--code:#212a35}}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.55 system-ui,Segoe UI,sans-serif}
+  main{max-width:1040px;margin:0 auto;padding:32px 20px 120px}
+  h1{font-size:26px;margin:0 0 4px}h2{font-size:20px;margin:40px 0 12px;padding-bottom:6px;border-bottom:1px solid var(--border)}h3{font-size:16px;margin:0 0 6px}
+  .sub{color:var(--muted);margin:0 0 20px}
+  code{background:var(--code);padding:1px 5px;border-radius:4px;font-size:13px}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px 18px;margin:12px 0}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
+  .tag{display:inline-block;font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px;border:1px solid currentColor;margin-right:6px;vertical-align:middle}
+  .t-err{color:var(--err)}.t-warn{color:var(--warn)}.t-ok{color:var(--ok)}.t-info{color:var(--accent)}
+  table{width:100%;border-collapse:collapse;font-size:13.5px}
+  th,td{text-align:left;padding:7px 9px;border-bottom:1px solid var(--border);vertical-align:top}
+  th{color:var(--muted);font-weight:600}
+  .verdict{border-left:4px solid var(--accent);background:var(--card);padding:14px 18px;border-radius:6px;margin:16px 0}
+  .opt{display:block;cursor:pointer}
+  .opt input{margin-right:8px;transform:scale(1.15)}
+  .opt:has(input:checked){border-color:var(--accent);box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 30%,transparent)}
+  .meta{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12.5px;color:var(--muted);margin:6px 0}
+  .pc{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px;font-size:13.5px}
+  .pc div{padding:8px 10px;border-radius:6px;background:var(--code)}
+  .pc b.p{color:var(--ok)}.pc b.c{color:var(--err)}
+  details{margin:8px 0}summary{cursor:pointer;color:var(--accent)}
+  .bar{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--border);padding:12px 20px;display:flex;gap:12px;align-items:center;justify-content:center;flex-wrap:wrap}
+  button{background:var(--accent);color:#fff;border:0;border-radius:6px;padding:8px 16px;font-size:14px;cursor:pointer}
+  #sel{font-size:13px;color:var(--muted);max-width:640px}
+  svg{width:100%;height:auto;max-width:960px}
+  @media(max-width:640px){.pc{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<main>
+<h1>Why conversations don't "continue"</h1>
+<p class="sub">Diagnosis from <code>logs/api.log</code>, <code>.run/*.log</code> and source, by 4 read-only subagents. No files were changed. The 2026-10-10 traffic is real; most of the earlier log is the pytest suite.</p>
+
+<div class="verdict">
+<b>Bottom line.</b> The backend does <u>not</u> lose chat ids. Conversation <code>b6fe4cfc…</code> was created 10-09 16:11, survived 3 server restarts, and accepted new turns on 10-10 at 01:55, 01:58 and 02:01. Continuity breaks in <b>three separate places</b>:
+<ol style="margin:8px 0 0">
+<li><b>UI forgets which chat you were in.</b> <code>activeId</code> is <code>useState(sampleId)</code> and is never saved, so every reload opens the demo chat. Vite fires a full reload on each <code>src/</code> edit, which makes this happen often.</li>
+<li><b>A chat dies permanently at 12,000 bytes of history.</b> Seen live: <code>f54a39a8…</code> got HTTP 413 <code>context_limit</code> on its 5th turn at 01:40:58. History only grows, so every later send also fails.</li>
+<li><b>The agent has no memory of facts between turns.</b> City, manual and regime are re-derived from the raw transcript each turn, and a few of those derivations are wrong for follow-ups.</li>
+</ol>
+</div>
+
+<h2>1. What the logs show</h2>
+<div class="grid">
+  <div class="card"><span class="tag t-ok">OK</span><b>Backend persistence</b><br>One server process (pid 43768) since 01:32:34. No 404 on any conversation GET and no 5xx in the real section (lines 3020–3156). Messages are rebuilt from Postgres on every turn.</div>
+  <div class="card"><span class="tag t-err">BUG</span><b>Reload lands on sample chat</b><br>After each reload the UI called only <code>GET /api/conversations</code> (list). Every <code>GET /api/conversations/{id}</code> came 16 s or more later, i.e. a manual click (e.g. 3063 at 01:35:57, 3107 at 01:45:56).</div>
+  <div class="card"><span class="tag t-err">BUG</span><b>413 on f54a39a8</b><br>Four 200s (63.4 s, 11.5 s, 8.2 s, 39.5 s) then <code>POST … 413 61.5ms</code> at 01:40:58 (line 3091). No later POST to that chat.</div>
+  <div class="card"><span class="tag t-warn">WATCH</span><b>Turns take 8–63 s</b><br>Real POSTs ran 0.65 s to 63.4 s. Concurrent <code>GET /api/routing-runs</code> took 21–56 s and finished with them. Cause not proven (see unknowns).</div>
+</div>
+
+<div class="card">
+<h3>Real traffic timeline (2026-10-10)</h3>
+<table>
+<tr><th>Time</th><th>Chat</th><th>Event</th><th>Log line</th></tr>
+<tr><td>01:33:03</td><td>—</td><td>page load: <code>GET /api/conversations</code> only</td><td>3029</td></tr>
+<tr><td>01:34:15 – 01:40:25</td><td>f54a39a8</td><td>4 × POST 200 (63.4 / 11.5 / 8.2 / 39.5 s)</td><td>3039–3087</td></tr>
+<tr><td>01:35:57</td><td>b6fe4cfc</td><td>user click → <code>GET /api/conversations/{id}</code> 200 in 15 ms</td><td>3063</td></tr>
+<tr><td class="t-err">01:40:58</td><td>f54a39a8</td><td><b>POST 413 context_limit</b></td><td>3091</td></tr>
+<tr><td>01:45:56 – 01:48:21</td><td>14e8baa8</td><td>click, then 3 × POST 200 (1.6 / 0.65 / 28.7 s)</td><td>3107–3119</td></tr>
+<tr><td>01:55:35 – 02:01:29</td><td>b6fe4cfc</td><td>3 × POST 200 (29.2 / 28.1 / 20.1 s) on a chat created the previous day</td><td>3125–3151</td></tr>
+</table>
+<p class="sub" style="margin:8px 0 0">Test traffic was separated by a mechanical rule: real requests log both an <code>app.main</code> line and a <code>uvicorn.access</code> line; ASGI-transport test requests log only <code>app.main</code>, in ~2.07 s bursts.</p>
+</div>
+
+<h2>2. Where continuity breaks</h2>
+<svg viewBox="0 0 960 150" role="img" aria-label="Turn pipeline with three failure points">
+  <g font-size="13" fill="currentColor" stroke="currentColor" stroke-width="1.2">
+    <rect x="10" y="40" width="170" height="60" rx="8" fill="none"/><text x="95" y="66" text-anchor="middle" stroke="none">Browser</text><text x="95" y="86" text-anchor="middle" stroke="none" fill="var(--muted)" font-size="11">activeId in useState</text>
+    <rect x="250" y="40" width="190" height="60" rx="8" fill="none"/><text x="345" y="66" text-anchor="middle" stroke="none">TurnService</text><text x="345" y="86" text-anchor="middle" stroke="none" fill="var(--muted)" font-size="11">history = all rows, ≤12,000 B</text>
+    <rect x="510" y="40" width="190" height="60" rx="8" fill="none"/><text x="605" y="66" text-anchor="middle" stroke="none">LangGraph agent</text><text x="605" y="86" text-anchor="middle" stroke="none" fill="var(--muted)" font-size="11">stateless, re-derives facts</text>
+    <rect x="770" y="40" width="170" height="60" rx="8" fill="none"/><text x="855" y="66" text-anchor="middle" stroke="none">Postgres</text><text x="855" y="86" text-anchor="middle" stroke="none" fill="var(--muted)" font-size="11">durable, works</text>
+    <path d="M180 70H250M440 70H510M700 70H770" fill="none"/>
+    <circle cx="95" cy="28" r="13" fill="var(--err)" stroke="none"/><text x="95" y="33" text-anchor="middle" stroke="none" fill="#fff" font-weight="700">1</text>
+    <circle cx="345" cy="28" r="13" fill="var(--err)" stroke="none"/><text x="345" y="33" text-anchor="middle" stroke="none" fill="#fff" font-weight="700">2</text>
+    <circle cx="605" cy="28" r="13" fill="var(--warn)" stroke="none"/><text x="605" y="33" text-anchor="middle" stroke="none" fill="#fff" font-weight="700">3</text>
+  </g>
+</svg>
+
+<div class="card">
+<h3><span class="tag t-err">1</span> UI never saves the active chat id <span class="tag t-info">certain</span></h3>
+<ul>
+<li><code>src/ChatWorkspace.tsx:65</code> <code>useState(sampleId)</code>; <code>:78</code> the ref starts the same. No code writes it to localStorage, the URL or the server. The only <code>localStorage</code> uses in <code>src/</code> are <code>civil-theme</code> (<code>App.tsx</code>) and the legacy-import keys.</li>
+<li>Mount effect (<code>:90-134</code>) merges the server list into the sidebar but never calls <code>selectChat</code>. The detail-fetch effect returns early for <code>sampleId</code>, so no conversation loads until you click.</li>
+<li>Also lost on reload: unsent drafts and the manual-scope selection. Switching Engineer ↔ Admin is <b>not</b> a cause: both workspaces stay mounted (<code>App.tsx:96-104</code>).</li>
+<li>Smaller hazards: a reload between <code>createChat</code> and the create POST dropping the first typed message; each "New chat" click creating an empty server conversation immediately.</li>
+</ul>
+</div>
+
+<div class="card">
+<h3><span class="tag t-err">2</span> Hard 12,000-byte history wall; failed turns pollute history <span class="tag t-info">certain</span></h3>
+<ul>
+<li><code>app/services/turns.py:28,103-110</code>: if <code>json.dumps(history + new)</code> exceeds <code>MAX_REQUEST_BYTES</code>, the turn is finished as <code>context_limit</code> with zero model calls and a 413. Nothing is trimmed (asserted intentionally by <code>tests/test_routing_api.py:295-325</code>).</li>
+<li><code>_load_context</code> (<code>:322-334</code>) loads <b>every</b> user row and every <code>assistant_answer</code> row, no limit. <code>_finish</code> (<code>:431-441</code>) writes <code>origin="assistant_answer"</code> for <i>all</i> outcomes, so <code>FAILED_ANSWER_CONTENT</code>, blocked, clarification and direct rows all go back into later history and the LLM sees the failure text as an assistant message. A 413 turn adds a user row plus a FAILED row, which makes the next turn worse.</li>
+<li>Rough fit (<b>[INFERENCE]</b>, live DB unreachable): ~2.1–3.3 KB per turn pair gives 3–5 turns. This matches 4 successes then 413.</li>
+<li>A server restart during a pending turn converts it to a permanent <code>interrupted</code> FAILED row (<code>mark_orphaned_runs</code>, <code>:122-130</code>). There is no checkpointer, so an in-flight run cannot be resumed.</li>
+</ul>
+</div>
+
+<div class="card">
+<h3><span class="tag t-warn">3</span> Agent has no cross-turn memory; follow-up handling is brittle <span class="tag t-info">high on code, not executed</span></h3>
+<table>
+<tr><th>Defect</th><th>Where</th><th>Effect</th></tr>
+<tr><td>City re-derived each turn; <code>routing_runs.city</code> is written but never read back</td><td><code>agent.py:316-321, 478-488</code></td><td>If qwen returns null mid-topic the user is asked for the city again</td></tr>
+<tr><td>Earlier city mention overrides a later switch (<code>corpus_city_in_question</code> scans all user turns)</td><td><code>agent.py:316-321</code></td><td>"what about Dallas?" is forced to the corpus city <b>[INFERENCE]</b></td></tr>
+<tr><td>Manual named earlier is lost; <code>context.manual_hint</code> from the LLM is never used</td><td><code>agent.py:~495</code></td><td>Follow-up without the manual name searches all manuals</td></tr>
+<tr><td>Only the extracted <code>search_query</code> is standalone; grading and generation get the raw follow-up</td><td><code>agent.py:~677, ~1090, 926</code></td><td>Quality depends on one qwen3:8b JSON call</td></tr>
+<tr><td>City clarification needs <code>history[-1] == CITY_CLARIFICATION</code> exactly</td><td><code>agent.py:285-289</code></td><td>Any intervening turn or changed wording turns the reply into a fresh question</td></tr>
+<tr><td>"Section X exists in more than one manual" clarification has no follow-up detection</td><td><code>agent.py:1228-1230</code></td><td>Reply "drainage" is treated as a new question</td></tr>
+<tr><td>Full transcript pasted into ~9 prompts; Ollama truncates silently above <code>num_ctx=8192</code></td><td>ADR 0009 line 72</td><td>~900 tokens headroom at the measured max prompt</td></tr>
+</table>
+</div>
+
+<h2>3. Options — pick what you want</h2>
+<p class="sub">Tick one or more per group, then use the bar at the bottom to copy your selection and paste it back to me. Sizes are estimates from the touchpoints, not measurements.</p>
+
+<h3 style="margin-top:24px">Group A — Remember the chat across reloads (fixes 1)</h3>
+<label class="card opt"><input type="checkbox" name="opt" value="A1 localStorage restore (recommended)">
+<b>A1. localStorage key + validate against server list</b> <span class="tag t-ok">recommended</span>
+<div class="meta"><span>~25–40 lines</span><span>frontend only</span><span>no migration</span></div>
+New key (e.g. <code>civil-active-conversation-v1</code>; never reuse <code>civil-reference-chats-v1</code>, which the legacy importer would parse and then delete). Write in <code>selectChat</code> for real server ids only; after the list loads, restore if the id is in the list and the user hasn't clicked yet. Handle 404 from <code>getConversation</code> explicitly (clear key, fall back to sample) so it never hangs on "Loading conversation".
+<div class="pc"><div><b class="p">Pros</b><br>Smallest change; survives tab close and browser restart; same pattern as <code>civil-theme</code>.</div><div><b class="c">Cons</b><br>Not bookmarkable; one "last chat" shared across tabs; sample chat flashes until the list returns.</div></div></label>
+
+<label class="card opt"><input type="checkbox" name="opt" value="A2 URL hash #c=uuid">
+<b>A2. URL hash <code>#c=&lt;uuid&gt;</code></b>
+<div class="meta"><span>~35–60 lines</span><span>frontend only</span></div>
+Lazy <code>useState</code> initialiser reads the hash, so the first render already fetches the right chat. Per-tab state, back/forward and shareable links.
+<div class="pc"><div><b class="p">Pros</b><br>No sample flash; independent tabs; no storage keys.</div><div><b class="c">Cons</b><br>Typing the bare URL in a new tab loses it; needs hashchange plumbing; a hash id can 404 before legacy import finishes.</div></div></label>
+
+<label class="card opt"><input type="checkbox" name="opt" value="A3 auto-open most recently updated chat (minimal)">
+<b>A3. Auto-open the most recently updated chat</b>
+<div class="meta"><span>~8–12 lines</span><span>frontend only</span></div>
+After the list loads, if still on the sample chat, select <code>list[0]</code>.
+<div class="pc"><div><b class="p">Pros</b><br>Trivial; no storage or URL.</div><div><b class="c">Cons</b><br>Heuristic: picks last <i>updated</i>, not last <i>viewed</i>; an empty orphan from "New chat" can win.</div></div></label>
+
+<label class="card opt"><input type="checkbox" name="opt" value="A4 server-side last-opened (full)">
+<b>A4. Server-side "last opened" field + endpoint</b>
+<div class="meta"><span>~120–200 lines</span><span>Alembic revision + models + schemas + route + tests</span></div>
+<div class="pc"><div><b class="p">Pros</b><br>Syncs across browsers; survives cleared storage.</div><div><b class="c">Cons</b><br>Largest change for a single-user local pilot; an extra write on every click; no per-tab state.</div></div></label>
+
+<h3 style="margin-top:24px">Group B — Stop long chats dying and keep failures out of history (fixes 2)</h3>
+<label class="card opt"><input type="checkbox" name="opt" value="B1 window history + exclude failed rows (recommended)">
+<b>B1. Window the history and exclude failed/interrupted rows</b> <span class="tag t-ok">recommended</span>
+<div class="meta"><span>app/services/turns.py</span><span>rewrite 2 tests</span><span>0 extra model calls</span></div>
+Keep the new message and the latest clarification pair (so city/regime follow-ups still work), then add recent turns newest-first until the budget is hit. Filter out FAILED/error/<code>context_limit</code> assistant rows and their orphan user rows via a join on the run outcome. Keep <code>context_limit</code> only if the single new message alone is too large. Trimming moves before <code>_record_context_and_sources</code> so the audit rows list what was actually sent.
+<div class="pc"><div><b class="p">Pros</b><br>A topic can continue indefinitely; shortens prompts; deterministic.</div><div><b class="c">Cons</b><br>Old facts silently fall out (pair with C2); reverses the "history is never truncated" contract that <code>tests/test_routing_api.py:278,295</code> assert.</div></div></label>
+
+<label class="card opt"><input type="checkbox" name="opt" value="B2 rolling LLM summary of older turns">
+<b>B2. Rolling LLM summary of older turns</b>
+<div class="meta"><span>new column or table + migration</span><span>+1 model call when summarising</span></div>
+<div class="pc"><div><b class="p">Pros</b><br>Best long-range memory.</div><div><b class="c">Cons</b><br>Largest change; extra latency on turns already at 20–29 s; summary drift; audit complexity.</div></div></label>
+
+<label class="card opt"><input type="checkbox" name="opt" value="B3 raise MAX_REQUEST_BYTES only">
+<b>B3. Raise <code>MAX_REQUEST_BYTES</code> only</b>
+<div class="meta"><span>1 constant</span></div>
+<div class="pc"><div><b class="p">Pros</b><br>One line.</div><div><b class="c">Cons</b><br>Delays the wall only; prompts can already hit the <code>num_ctx=8192</code> silent-truncation limit (ADR 0009 headroom ~900 tokens). Not recommended.</div></div></label>
+
+<label class="card opt"><input type="checkbox" name="opt" value="B4 pending-run recovery UX">
+<b>B4. Pending-run recovery UX</b> <span class="tag t-info">small, independent</span>
+<div class="meta"><span>turns.py + ChatWorkspace</span></div>
+Poll <code>GET /api/conversations/{id}</code> while <code>pending_run</code> is set so a reload shows "still working" and picks up the finished answer. Cannot resume a run killed by a server restart.
+<div class="pc"><div><b class="p">Pros</b><br>Fixes the lost-answer feeling after reload during a 20–60 s turn.</div><div><b class="c">Cons</b><br>No checkpointer, so a restart still loses the run.</div></div></label>
+
+<h3 style="margin-top:24px">Group C — Make follow-ups actually continue the topic (fixes 3)</h3>
+<label class="card opt"><input type="checkbox" name="opt" value="C1 standalone question carried through graph (recommended)">
+<b>C1. Carry a standalone question through the whole graph; fix city/manual bugs</b> <span class="tag t-ok">recommended</span>
+<div class="meta"><span>agent.py + agent_state.py</span><span>0 extra model calls</span><span>new policy hash</span></div>
+Store the standalone restatement from <code>extract_context</code> in state and use it in grading, generation and <code>rewrite_query</code>. Let a later explicit city override the sticky scan; use <code>context.manual_hint</code>. Add any schema change to <code>bootstrap.STRUCTURED_SCHEMAS</code>. No domain literals in prompts.
+<div class="pc"><div><b class="p">Pros</b><br>No added latency; small diff; routing stays in code.</div><div><b class="c">Cons</b><br>Still one qwen3:8b call; facts still re-derived each turn; does not fix the 12 KB wall.</div></div></label>
+
+<label class="card opt"><input type="checkbox" name="opt" value="C2 persist conversation facts (city/manual/regime)">
+<b>C2. Persist conversation facts and seed the agent</b>
+<div class="meta"><span>Alembic revision + models + <code>ask(..., facts=)</code></span><span>every test fake must accept the new kwarg</span></div>
+Store city, manual and regime per conversation (new column or table; <code>routing_runs</code> is append-only, so no UPDATE). Seed <code>AgentState</code> from it and let the new message override only what it states.
+<div class="pc"><div><b class="p">Pros</b><br>Deterministic city/manual memory independent of transcript length; makes B1 windowing safe.</div><div><b class="c">Cons</b><br>Largest of group C; needs a stale-fact rule; advisable ADR; GLOSSARY/README updates.</div></div></label>
+
+<label class="card opt"><input type="checkbox" name="opt" value="C3 separate condense_question node">
+<b>C3. Separate <code>condense_question</code> node before <code>extract_context</code></b>
+<div class="meta"><span>+1 qwen3:8b call per retrieval turn (~1–3 s, estimate)</span><span>ADR advisable</span></div>
+<div class="pc"><div><b class="p">Pros</b><br>Standalone question is its own trace event.</div><div><b class="c">Cons</b><br>Extra latency and failure point; overlaps with C1.</div></div></label>
+
+<label class="card opt"><input type="checkbox" name="opt" value="C4 harden clarification follow-up detection">
+<b>C4. Harden clarification follow-up detection</b>
+<div class="meta"><span>agent.py:285-298, 1227-1241</span></div>
+Build the regime string from its constant, add detection for the ambiguous-manual clarification, stop requiring an exact <code>history[-1]</code> string match.
+<div class="pc"><div><b class="p">Pros</b><br>Fixes silently dropped replies.</div><div><b class="c">Cons</b><br>Fixed strings are matched exactly today; wording changes need care with stored conversations.</div></div></label>
+
+<h2>4. Suggested bundle</h2>
+<div class="card">
+<b>A1 + B1 + C1</b>: no migration, no extra model calls, and it removes all three observed breaks. Add <b>B4</b> if reload during a long turn bothers you. Defer <b>C2</b> until you see city/manual drift survive C1.
+<p class="sub" style="margin:8px 0 0">Behavior changes would update <code>README.md</code>, and a new <code>agent.py</code> hash will register a new policy row. B1 and C1 each require rewriting or adding tests; C-group changes should be checked with <code>eval/run.py</code> on the live stack.</p>
+</div>
+
+<h2>5. Not verified</h2>
+<ul>
+<li><b>Live DB was unreachable:</b> the Docker daemon was down for every agent, so answer-length statistics and the message contents of <code>b6fe4cfc</code> / <code>14e8baa8</code> were not read.</li>
+<li><b>Nothing was executed against the agent</b> (no GPU/Ollama). Items marked <b>[INFERENCE]</b> are from code reading only, including the Dallas-override bug.</li>
+<li><b>Slow turns (8–63 s):</b> cause not established. Slow turns coincide with slow <code>GET /api/routing-runs</code> at the same instant, which hints at contention (shared GPU or event loop) rather than missing context. Not a continuity bug; worth a separate look.</li>
+<li><b>No browser was driven</b>; UI claims are static code reads plus log timing.</li>
+<li>The 413 on <code>f54a39a8</code> was attributed to accumulated history by arithmetic, not by reading the stored rows.</li>
+</ul>
+</main>
+
+<div class="bar">
+  <span id="sel">Nothing selected</span>
+  <button type="button" id="copy">Copy my selection</button>
+</div>
+<script>
+  const boxes=[...document.querySelectorAll('input[name=opt]')];
+  const sel=document.getElementById('sel');
+  const text=()=>{const v=boxes.filter(b=>b.checked).map(b=>b.value);return v.length?'Go with: '+v.join(' | '):''};
+  boxes.forEach(b=>b.addEventListener('change',()=>{sel.textContent=text()||'Nothing selected'}));
+  document.getElementById('copy').addEventListener('click',async()=>{
+    const t=text();if(!t)return;
+    try{await navigator.clipboard.writeText(t);sel.textContent='Copied: '+t}catch{sel.textContent=t+' (copy manually)'}
+  });
+</script>
+</body>
+</html>
