@@ -320,18 +320,33 @@ async def _resolve_scope(session: AsyncSession, manual_ids: list[str]) -> list[d
 
 
 async def _load_context(session: AsyncSession, conversation_id: UUID) -> list[MessageRecord]:
-    return list(
-        (
-            await session.scalars(
-                select(MessageRecord)
-                .where(
-                    MessageRecord.conversation_id == conversation_id,
-                    ((MessageRecord.role == "user") | (MessageRecord.origin == "assistant_answer")),
-                )
-                .order_by(MessageRecord.sequence)
+    """Load user messages and assistant replies that belong in the next turn's history."""
+    rows = (
+        await session.execute(
+            select(MessageRecord, RoutingRun.status, RoutingRun.outcome)
+            .outerjoin(RoutingRun, RoutingRun.id == MessageRecord.routing_run_id)
+            .where(
+                MessageRecord.conversation_id == conversation_id,
+                ((MessageRecord.role == "user") | (MessageRecord.origin == "assistant_answer")),
             )
-        ).all()
+            .order_by(MessageRecord.sequence)
+        )
+    ).all()
+    latest_user_sequence = next(
+        (message.sequence for message, _, _ in reversed(rows) if message.role == "user"),
+        None,
     )
+    open_clarification_sequence = latest_user_sequence - 1 if latest_user_sequence is not None else None
+    return [
+        message
+        for message, status, outcome in rows
+        if message.role == "user"
+        or (
+            status == "classified"
+            and outcome != "blocked"
+            and (outcome != "clarification" or message.sequence == open_clarification_sequence)
+        )
+    ]
 
 
 def _record_context_and_sources(
